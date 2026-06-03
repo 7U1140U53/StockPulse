@@ -21,12 +21,10 @@ import {
 } from 'lucide-react';
 
 // Initialize open database connection for MVP testing
-const supabaseUrl =
-  import.meta.env.VITE_SUPABASE_URL ||
-  'https://hylzqoaymdwmureerflp.supabase.co';
-const supabaseAnonKey =
-  import.meta.env.VITE_SUPABASE_ANON_KEY ||
-  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh5bHpxb2F5bWR3bXVyZWVyflpWUiIsicm9sZSI6ImFub24iLCJpYXQiOjE3NzkwMDA2OTEsImV4cCI6MjA5NDU3NjY5MX0.pnqrRudzzxXBu7D98MAHte4McPwVzgmhIV18NnIQYkY';
+// Initialize database connection securely using environment variables
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 export default function App() {
