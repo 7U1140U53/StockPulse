@@ -1,0 +1,637 @@
+import React, { useState, useEffect, useMemo } from 'react';
+import { createClient } from '@supabase/supabase-js';
+import {
+  Plus,
+  Minus,
+  Search,
+  AlertTriangle,
+  Layers,
+  Trash2,
+  ShoppingBag,
+  Filter,
+  Loader2,
+  RefreshCw,
+} from 'lucide-react';
+
+// Initialize open database connection for MVP testing
+const supabaseUrl =
+  import.meta.env.VITE_SUPABASE_URL ||
+  'https://hylzqoaymdwmureerflp.supabase.co';
+const supabaseAnonKey =
+  import.meta.env.VITE_SUPABASE_ANON_KEY ||
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh5bHpxb2F5bWR3bXVyZWVyZmxwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkwMDA2OTEsImV4cCI6MjA5NDU3NjY5MX0.pnqrRudzzxXBu7D98MAHte4McPwVzgmhIV18NnIQYkY';
+const supabase = createClient(supabaseUrl, supabaseAnonKey);
+
+export default function App() {
+  const [inventory, setInventory] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [errorMessage, setErrorMessage] = useState(null);
+
+  // App Control States
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filterMode, setFilterMode] = useState('all'); // 'all' | 'alerts'
+
+  // Product Creation Form States
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [newProduct, setNewProduct] = useState({
+    product_name: '',
+    sku: '',
+    quantity: '',
+    threshold: '5',
+    unit_price: '',
+  });
+
+  // ==========================================
+  // 1. LIVE DATABASE DATA FETCH ENGINE
+  // ==========================================
+  const fetchInventory = async () => {
+    try {
+      setLoading(true);
+      setErrorMessage(null);
+
+      const { data, error } = await supabase
+        .from('inventory')
+        .select('*')
+        .order('product_name', { ascending: true });
+
+      if (error) throw error;
+      setInventory(data || []);
+    } catch (err) {
+      console.error('Database connection error:', err.message);
+      setErrorMessage(
+        'Could not load inventory database. Ensure your keys are correct and the database is accessible.'
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Run the fetch engine automatically on app startup
+  useEffect(() => {
+    fetchInventory();
+  }, []);
+
+  // ==========================================
+  // 2. LIVE STATE ANALYTICS
+  // ==========================================
+  const stats = useMemo(() => {
+    let totalItems = inventory.length;
+    let lowStockCount = 0;
+    let totalValue = 0;
+
+    inventory.forEach((item) => {
+      const qty = Number(item.quantity) || 0;
+      const price = Number(item.unit_price) || 0;
+      const threshold = Number(item.threshold) || 0;
+
+      totalValue += qty * price;
+      if (qty <= threshold) {
+        lowStockCount++;
+      }
+    });
+
+    return { totalItems, lowStockCount, totalValue };
+  }, [inventory]);
+
+  const getItemStatus = (quantity, threshold) => {
+    const q = Number(quantity) || 0;
+    const t = Number(threshold) || 0;
+
+    if (q === 0)
+      return {
+        label: 'Out of Stock',
+        classes: 'bg-red-50 text-red-700 border-red-200',
+      };
+    if (q <= t)
+      return {
+        label: 'Low Stock',
+        classes: 'bg-amber-50 text-amber-700 border-amber-200',
+      };
+    return {
+      label: 'In Stock',
+      classes: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+    };
+  };
+
+  // ==========================================
+  // 3. TRANSACTION EXECUTION (SUPABASE MUTATIONS)
+  // ==========================================
+
+  // Direct Quick Stock Count Increment / Decrement
+  const handleAdjustStock = async (id, currentQuantity, change) => {
+    const targetQuantity = currentQuantity + change;
+    if (targetQuantity < 0) return;
+
+    try {
+      // Optimistic state display update for immediate UI responsiveness
+      setInventory((prev) =>
+        prev.map((item) =>
+          item.id === id ? { ...item, quantity: targetQuantity } : item
+        )
+      );
+
+      const { error } = await supabase
+        .from('inventory')
+        .update({
+          quantity: targetQuantity,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', id);
+
+      if (error) throw error;
+    } catch (err) {
+      alert('Failed to sync stock change: ' + err.message);
+      fetchInventory(); // Revert back to true database state on failure
+    }
+  };
+
+  // Create a brand new product catalog line item
+  const handleCreateProduct = async (e) => {
+    e.preventDefault();
+    if (!newProduct.product_name) return;
+
+    try {
+      setLoading(true);
+
+      // Build properly formatted payload tailored for the unrestricted table (NO user_id)
+      const payload = {
+        product_name: newProduct.product_name,
+        sku: newProduct.sku || null,
+        quantity: parseInt(newProduct.quantity) || 0,
+        threshold: parseInt(newProduct.threshold) || 0,
+        unit_price: parseFloat(newProduct.unit_price) || 0.0,
+      };
+
+      const { error } = await supabase.from('inventory').insert([payload]);
+
+      if (error) throw error;
+
+      // Close the workspace modal and scrub input states clean
+      setShowAddModal(false);
+      setNewProduct({
+        product_name: '',
+        sku: '',
+        quantity: '',
+        threshold: '5',
+        unit_price: '',
+      });
+
+      // Pull fresh data rows to guarantee complete synchronization
+      await fetchInventory();
+    } catch (err) {
+      alert('Error adding product item record: ' + err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Permanently delete a line item row
+  const handleDeleteProduct = async (id) => {
+    if (
+      !window.confirm(
+        'Are you sure you want to permanently delete this product record from your database storage?'
+      )
+    )
+      return;
+
+    try {
+      const { error } = await supabase.from('inventory').delete().eq('id', id);
+
+      if (error) throw error;
+      setInventory((prev) => prev.filter((item) => item.id !== id));
+    } catch (err) {
+      alert('Error deleting product record: ' + err.message);
+    }
+  };
+
+  // Real-time keyword filter algorithm parsing
+  const filteredInventory = useMemo(() => {
+    return inventory.filter((item) => {
+      const name = item.product_name ? item.product_name.toLowerCase() : '';
+      const sku = item.sku ? item.sku.toLowerCase() : '';
+      const search = searchTerm.toLowerCase();
+
+      const matchesSearch = name.includes(search) || sku.includes(search);
+      const matchesFilter =
+        filterMode === 'all' || item.quantity <= item.threshold;
+
+      return matchesSearch && matchesFilter;
+    });
+  }, [inventory, searchTerm, filterMode]);
+
+  return (
+    <div className="min-h-screen bg-slate-50 font-sans text-slate-800 antialiased">
+      {/* APP TOP PANEL BANNER */}
+      <nav className="sticky top-0 z-50 border-b border-slate-200 bg-white px-6 py-4 shadow-sm">
+        <div className="mx-auto flex max-w-7xl items-center justify-between">
+          <div className="flex items-center space-x-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-600 text-white shadow-md shadow-blue-200">
+              <ShoppingBag className="h-5 w-5" />
+            </div>
+            <div>
+              <span className="text-xl font-bold tracking-tight text-slate-900">
+                StockPulse
+              </span>
+              <span className="ml-2 rounded-md bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-700">
+                Live DB Active
+              </span>
+            </div>
+          </div>
+
+          <button
+            onClick={fetchInventory}
+            className="flex items-center space-x-1 text-sm border border-slate-200 px-3 py-1.5 rounded-lg bg-white hover:bg-slate-50 transition text-slate-600"
+          >
+            <RefreshCw
+              className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`}
+            />
+            <span>Sync</span>
+          </button>
+        </div>
+      </nav>
+
+      <main className="mx-auto max-w-7xl p-4 sm:p-6 lg:p-8">
+        {errorMessage && (
+          <div className="mb-6 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800 shadow-sm">
+            {errorMessage}
+          </div>
+        )}
+
+        {/* ANALYTICS BANNER CARDS */}
+        <div className="mb-8 grid grid-cols-1 gap-5 sm:grid-cols-3">
+          <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium uppercase tracking-wider text-slate-500">
+                  Total Catalog Items
+                </p>
+                <h3 className="mt-2 text-3xl font-bold text-slate-900">
+                  {stats.totalItems}
+                </h3>
+              </div>
+              <div className="rounded-xl bg-slate-100 p-3 text-slate-600">
+                <Layers className="h-6 w-6" />
+              </div>
+            </div>
+          </div>
+
+          <div
+            className={`rounded-2xl border p-6 shadow-sm ${
+              stats.lowStockCount > 0
+                ? 'border-amber-200 bg-amber-50/20'
+                : 'border-slate-200 bg-white'
+            }`}
+          >
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium uppercase tracking-wider text-slate-500">
+                  Alert Items
+                </p>
+                <h3
+                  className={`mt-2 text-3xl font-bold ${
+                    stats.lowStockCount > 0
+                      ? 'text-amber-600'
+                      : 'text-slate-900'
+                  }`}
+                >
+                  {stats.lowStockCount}
+                </h3>
+              </div>
+              <div
+                className={`rounded-xl p-3 ${
+                  stats.lowStockCount > 0
+                    ? 'bg-amber-100 text-amber-600'
+                    : 'bg-slate-100 text-slate-600'
+                }`}
+              >
+                <AlertTriangle className="h-6 w-6" />
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium uppercase tracking-wider text-slate-500">
+                  Total Asset Valuation
+                </p>
+                <h3 className="mt-2 text-3xl font-bold text-slate-900">
+                  ₦
+                  {stats.totalValue.toLocaleString('en-US', {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
+                  })}
+                </h3>
+              </div>
+              <div className="rounded-xl bg-emerald-50 p-3 text-emerald-600">
+                <ShoppingBag className="h-6 w-6" />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* CONTROLS BAR */}
+        <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="relative flex-1 max-w-md">
+            <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">
+              <Search className="h-4 w-4" />
+            </div>
+            <input
+              type="text"
+              placeholder="Search data table by item name or SKU..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full rounded-xl border border-slate-200 bg-white py-2.5 pl-10 pr-4 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+            />
+          </div>
+
+          <div className="flex items-center space-x-3">
+            <div className="inline-flex rounded-xl bg-slate-200/70 p-1">
+              <button
+                onClick={() => setFilterMode('all')}
+                className={`rounded-lg px-4 py-1.5 text-xs font-semibold transition ${
+                  filterMode === 'all'
+                    ? 'bg-white text-slate-900 shadow-sm'
+                    : 'text-slate-600'
+                }`}
+              >
+                All Stock
+              </button>
+              <button
+                onClick={() => setFilterMode('alerts')}
+                className={`rounded-lg px-4 py-1.5 text-xs font-semibold transition ${
+                  filterMode === 'alerts'
+                    ? 'bg-white text-slate-900 shadow-sm'
+                    : 'text-slate-600'
+                }`}
+              >
+                Alerts Only
+              </button>
+            </div>
+
+            <button
+              onClick={() => setShowAddModal(true)}
+              className="flex items-center space-x-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 transition"
+            >
+              <Plus className="h-4 w-4" />
+              <span>Add Product</span>
+            </button>
+          </div>
+        </div>
+
+        {/* PRIMARY INVENTORY CONTAINER */}
+        <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+          {loading && inventory.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-12 text-slate-500">
+              <Loader2 className="h-8 w-8 animate-spin text-blue-600 mb-4" />
+              <p>Syncing catalog data...</p>
+            </div>
+          ) : inventory.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-16 text-center">
+              <div className="rounded-full bg-slate-100 p-4 mb-4">
+                <ShoppingBag className="h-8 w-8 text-slate-400" />
+              </div>
+              <h3 className="text-lg font-medium text-slate-900">
+                No products found
+              </h3>
+              <p className="mt-1 text-sm text-slate-500">
+                Get started by adding your first product to the catalog.
+              </p>
+              <button
+                onClick={() => setShowAddModal(true)}
+                className="mt-6 flex items-center space-x-2 rounded-lg bg-blue-50 px-4 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-100 transition"
+              >
+                <Plus className="h-4 w-4" />
+                <span>Add Product</span>
+              </button>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm">
+                <thead className="bg-slate-50 text-slate-600">
+                  <tr>
+                    <th className="px-6 py-4 font-semibold">
+                      Product Information
+                    </th>
+                    <th className="px-6 py-4 font-semibold text-center">
+                      Status
+                    </th>
+                    <th className="px-6 py-4 font-semibold text-center">
+                      Quantity
+                    </th>
+                    <th className="px-6 py-4 font-semibold text-right">
+                      Value
+                    </th>
+                    <th className="px-6 py-4 font-semibold text-right">
+                      Actions
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {filteredInventory.map((item) => {
+                    const status = getItemStatus(item.quantity, item.threshold);
+                    return (
+                      <tr
+                        key={item.id}
+                        className="transition hover:bg-slate-50/50"
+                      >
+                        <td className="px-6 py-4">
+                          <div className="font-medium text-slate-900">
+                            {item.product_name}
+                          </div>
+                          <div className="mt-1 text-xs text-slate-500">
+                            SKU: {item.sku || 'N/A'} | Alert at:{' '}
+                            {item.threshold}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 text-center">
+                          <span
+                            className={`inline-flex items-center rounded-md border px-2.5 py-0.5 text-xs font-semibold ${status.classes}`}
+                          >
+                            {status.label}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="flex items-center justify-center space-x-3">
+                            <button
+                              onClick={() =>
+                                handleAdjustStock(item.id, item.quantity, -1)
+                              }
+                              className="rounded bg-slate-100 p-1 text-slate-500 hover:bg-slate-200 hover:text-slate-700 transition"
+                              disabled={item.quantity <= 0}
+                            >
+                              <Minus className="h-4 w-4" />
+                            </button>
+                            <span className="w-8 text-center font-bold text-slate-900">
+                              {item.quantity}
+                            </span>
+                            <button
+                              onClick={() =>
+                                handleAdjustStock(item.id, item.quantity, 1)
+                              }
+                              className="rounded bg-slate-100 p-1 text-slate-500 hover:bg-slate-200 hover:text-slate-700 transition"
+                            >
+                              <Plus className="h-4 w-4" />
+                            </button>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 text-right font-medium text-slate-900">
+                          ₦
+                          {(item.quantity * item.unit_price).toLocaleString(
+                            'en-US',
+                            {
+                              minimumFractionDigits: 2,
+                              maximumFractionDigits: 2,
+                            }
+                          )}
+                        </td>
+                        <td className="px-6 py-4 text-right">
+                          <button
+                            onClick={() => handleDeleteProduct(item.id)}
+                            className="inline-flex rounded-lg p-2 text-slate-400 hover:bg-red-50 hover:text-red-600 transition"
+                            title="Delete Item"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </main>
+
+      {/* ADD PRODUCT MODAL */}
+      {showAddModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-xl">
+            <div className="border-b border-slate-100 px-6 py-4">
+              <h3 className="text-lg font-bold text-slate-900">
+                Add New Product
+              </h3>
+            </div>
+            <form onSubmit={handleCreateProduct} className="p-6">
+              <div className="space-y-4">
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-slate-700">
+                    Product Name *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={newProduct.product_name}
+                    onChange={(e) =>
+                      setNewProduct({
+                        ...newProduct,
+                        product_name: e.target.value,
+                      })
+                    }
+                    className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                    placeholder="e.g. Wireless Mouse"
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-slate-700">
+                    SKU (Optional)
+                  </label>
+                  <input
+                    type="text"
+                    value={newProduct.sku}
+                    onChange={(e) =>
+                      setNewProduct({ ...newProduct, sku: e.target.value })
+                    }
+                    className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                    placeholder="e.g. WM-001"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-slate-700">
+                      Initial Quantity
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={newProduct.quantity}
+                      onChange={(e) =>
+                        setNewProduct({
+                          ...newProduct,
+                          quantity: e.target.value,
+                        })
+                      }
+                      className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                      placeholder="0"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-slate-700">
+                      Alert Threshold
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={newProduct.threshold}
+                      onChange={(e) =>
+                        setNewProduct({
+                          ...newProduct,
+                          threshold: e.target.value,
+                        })
+                      }
+                      className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-slate-700">
+                    Unit Price (₦)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={newProduct.unit_price}
+                    onChange={(e) =>
+                      setNewProduct({
+                        ...newProduct,
+                        unit_price: e.target.value,
+                      })
+                    }
+                    className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                    placeholder="0.00"
+                  />
+                </div>
+              </div>
+
+              <div className="mt-8 flex items-center justify-end space-x-3">
+                <button
+                  type="button"
+                  onClick={() => setShowAddModal(false)}
+                  className="rounded-xl px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={loading || !newProduct.product_name}
+                  className="flex items-center justify-center rounded-xl bg-blue-600 px-6 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50 transition"
+                >
+                  {loading ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    'Save Product'
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
