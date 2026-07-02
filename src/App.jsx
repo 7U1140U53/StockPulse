@@ -779,9 +779,10 @@ function AuthPage({ supabase, isDark, theme, setTheme }) {
 
   return (
     <div className={`min-h-screen w-full flex relative overflow-hidden transition-colors duration-300 ${isDark ? 'bg-slate-950 text-white' : 'bg-slate-50 text-slate-900'}`}>
-      
+
       {/* Dynamic Keyframes injected safely for native Tailwind CDN compatibility */}
-      <style dangerouslySetInnerHTML={{__html: `
+      <style dangerouslySetInnerHTML={{
+        __html: `
         @keyframes drift-orb-1 {
           0%, 100% { transform: translate(0px, 0px) scale(1); }
           33% { transform: translate(40px, -60px) scale(1.15); }
@@ -810,24 +811,24 @@ function AuthPage({ supabase, isDark, theme, setTheme }) {
             StockPulse
           </span>
         </div>
-        
+
         <div className="max-w-md my-auto space-y-6">
           <h1 className={`text-5xl font-extrabold tracking-tight leading-[1.15] bg-clip-text text-transparent bg-gradient-to-br ${isDark ? 'from-white via-slate-200 to-slate-400' : 'from-slate-900 via-slate-800 to-slate-600'}`}>
-            Manage your <br/>inventory layers.
+            Manage your <br />inventory layers.
           </h1>
           <p className={`text-sm leading-relaxed ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
-            Track your stock levels, price variations, updates, and profit valuations in one clean, straightforward context engine.
+            Track your stock levels, price variations, updates, and profit valuations in one clean, straightforward workspace.
           </p>
 
-          {/* Abstract Micro-Dashboard Widget to bridge the gap between layout and visual identity */}
+          {/* Abstract Micro-Dashboard Widget */}
           <div className={`p-4 rounded-xl border flex items-center space-x-3 shadow-xl backdrop-blur-md transition max-w-sm transform hover:scale-[1.02] duration-300 ${isDark ? 'bg-slate-900/40 border-slate-800/60 text-slate-200' : 'bg-white/50 border-slate-200/80 text-slate-800'}`}>
             <div className="relative flex h-2 w-2">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
               <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
             </div>
             <div className="flex-1 min-w-0">
-              <p className={`text-[11px] font-semibold tracking-wide uppercase ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>System Monitor</p>
-              <p className="text-xs font-bold font-mono mt-0.5 truncate">₦ Live ledger engine linked securely</p>
+              <p className={`text-[11px] font-semibold tracking-wide uppercase ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>Workspace Status</p>
+              <p className="text-xs font-bold font-mono mt-0.5 truncate">₦ Workspace authenticated</p>
             </div>
           </div>
         </div>
@@ -837,15 +838,15 @@ function AuthPage({ supabase, isDark, theme, setTheme }) {
 
       {/* RIGHT HALF: SECURE HANDSHAKE INTERFACE (Sleek card layer context) */}
       <div className="w-full lg:w-1/2 flex flex-col justify-center items-center px-6 py-12 relative z-10">
-        <button 
-          onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} 
+        <button
+          onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
           className={`absolute top-6 right-6 p-2.5 rounded-xl border transition backdrop-blur-md shadow-sm ${isDark ? 'border-slate-800 bg-slate-900/50 text-amber-400 hover:bg-slate-800' : 'border-slate-200 bg-white/70 text-slate-600 hover:bg-slate-50'}`}
         >
           {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
         </button>
 
         <div className={`w-full max-w-md p-8 rounded-2xl border backdrop-blur-md transition-all duration-300 shadow-2xl ${isDark ? 'border-slate-900 bg-slate-900/60' : 'border-slate-200/70 bg-white/70'}`}>
-          
+
           {/* Logo element visible exclusively on mobile views for system continuity */}
           <div className="flex lg:hidden items-center space-x-2 mb-6">
             <Layers className="h-5 w-5 text-blue-500 animate-pulse" />
@@ -856,10 +857,10 @@ function AuthPage({ supabase, isDark, theme, setTheme }) {
 
           <div className="mb-6">
             <h2 className="text-xl font-bold tracking-tight">
-              {isSignUp ? 'Create your account' : 'Welcome back'}
+              {isSignUp ? 'Create your account' : 'Admin Sign In'}
             </h2>
             <p className={`text-xs mt-1 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
-              {isSignUp ? 'Get started by creating your administrator profile.' : 'Sign in to monitor your active financial ledger metrics.'}
+              {isSignUp ? 'Get started by creating your administrator profile.' : 'Sign in to monitor your active workspace.'}
             </p>
           </div>
 
