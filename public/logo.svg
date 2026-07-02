@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none">
+  <defs>
+    <linearGradient id="pulse-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#3b82f6" />
+      <stop offset="100%" stop-color="#6366f1" />
+    </linearGradient>
+  </defs>
+  <!-- Top Layer -->
+  <path d="M16 4L28 10L16 16L4 10L16 4Z" fill="url(#pulse-grad)" />
+  <!-- Middle Layer (Offset) -->
+  <path d="M28 15L16 21L4 15M28 10L16 16L4 10" stroke="url(#pulse-grad)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" opacity="0.7" />
+  <!-- Bottom Layer (Offset) -->
+  <path d="M28 20L16 26L4 20M28 15L16 21L4 15" stroke="url(#pulse-grad)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" opacity="0.4" />
+</svg>
