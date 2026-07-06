@@ -113,4 +113,3 @@ The application will launch a hot-reloading pipeline available locally at http:/
 
 ***
 
-Do you need help writing a brief section detailing how your database trigger or code automatically hooks into the audit log when an item is updated?
